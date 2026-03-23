@@ -1,0 +1,5 @@
+mlx-whisper
+huggingface-hub
+tqdm
+ollama
+opencc

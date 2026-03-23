@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虛擬環境
+.venv/
+venv/
+env/
+
+# 排除內容但保留目錄結構 (使用 .gitkeep)
+models/*
+!models/.gitkeep
+audio/*
+!audio/.gitkeep
+output/*
+!output/.gitkeep
+final_output/*
+!final_output/.gitkeep
+
+# 完全排除
+版本/
+
+# 系統與工具
+.DS_Store
+**/.DS_Store
+.vscode/
