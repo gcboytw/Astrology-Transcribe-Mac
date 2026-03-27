@@ -1,5 +1,6 @@
 import os
 import glob
+import re
 from pathlib import Path
 import ollama
 from tqdm import tqdm
@@ -38,9 +39,35 @@ def generate_summary(md_file_path):
         return None
 
     
+    # 提取時間戳記 ### [HH:MM:SS]
+    timestamp_pattern = r'### \[(?P<time>\d{2}:\d{2}:\d{2})\]'
+    matches = list(re.finditer(timestamp_pattern, content))
+    
     # 每 2000 字切一段
     chunk_size = 2000
-    chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+    chunks = []
+    chunk_times = []
+    
+    for i in range(0, len(content), chunk_size):
+        chunk_start = i
+        chunk_end = min(i + chunk_size, len(content))
+        chunk = content[chunk_start:chunk_end]
+        chunks.append(chunk)
+        
+        # 找出本段落涵蓋的時間範圍
+        # 尋找落在此 chunk 範圍內的所有時間戳記
+        times_in_this_chunk = [m.group('time') for m in matches if chunk_start <= m.start() < chunk_end]
+        
+        if times_in_this_chunk:
+            start_t = times_in_this_chunk[0]
+            end_t = times_in_this_chunk[-1]
+        else:
+            # 如果這段裡面沒標籤，就找這段之前最後一個出現的標籤
+            prev_matches = [m.group('time') for m in matches if m.start() < chunk_start]
+            start_t = prev_matches[-1] if prev_matches else "00:00:00"
+            end_t = start_t
+            
+        chunk_times.append((start_t, end_t))
     
     try:
         client = ollama.Client(host='http://localhost:11434', timeout=600)
@@ -52,7 +79,10 @@ def generate_summary(md_file_path):
     full_summary = ""
     
     for idx, chunk in enumerate(chunks):
-        tqdm.write(f"⏳ [AI 思考中... 正在整理重點筆記，進度 {idx+1}/{len(chunks)}]")
+        start_t, end_t = chunk_times[idx]
+        time_range_str = f"[{start_t} - {end_t}]" if start_t != end_t else f"[{start_t}]"
+        
+        tqdm.write(f"⏳ [AI 思考中... 正在整理重點筆記，時間範圍 {time_range_str}，進度 {idx+1}/{len(chunks)}]")
         
         prompt = f"""你好！我是你的逐字稿整理助手。
 我會把這段錄音轉錄稿整理成一份結構清晰、重點突出的學習筆記。
@@ -64,7 +94,7 @@ def generate_summary(md_file_path):
 2. **語氣風格**：請維持溫和、清晰、條理分明的整理口吻，像是幫同學做好一份課堂筆記。
 3. **系統化結構**：請嚴格套用以下 Markdown 格式排版，不要隨意更動標題名稱：
 
-## 📑 學習筆記：[請根據這段內容起一個簡潔明確的副標題]
+## 📑 學習筆記 {time_range_str}：[請根據這段內容起一個簡潔明確的副標題]
 
 > [!TIP]
 > **本段核心**：[用 1-2 句話精煉地總結這段最重要的核心訊息，要讓人一眼就看懂講者在說什麼。]
@@ -116,7 +146,7 @@ def generate_summary(md_file_path):
         
             # 如果有多個 Part，則增加分段標題
             if len(chunks) > 1:
-                full_summary += f"\n\n---\n\n## 📒 第 {idx+1} 段整理\n\n"
+                full_summary += f"\n\n---\n\n## 📒 第 {idx+1} 段整理 {time_range_str}\n\n"
             
             full_summary += chunk_summary
 
