@@ -22,7 +22,7 @@ PYTHON = sys.executable               # 使用與目前相同的 venv Python
 SCRIPTS = {
     "transcribe": "transcribe_engine.py",
     "edit":       "sub_edit-14b.py",
-    "summy":      "sub_summy_general.py",
+    "summy":      "sub_summy.py",
 }
 
 # ─── 工具函式 ─────────────────────────────────────────────

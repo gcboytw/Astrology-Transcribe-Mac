@@ -1,5 +1,6 @@
 import os
 import glob
+import re
 from pathlib import Path
 import ollama
 from tqdm import tqdm
@@ -42,9 +43,33 @@ def generate_summary(md_file_path):
 
     glossary_str = "、".join(astrology_terms)
     
+    # 提取時間戳記 ### [HH:MM:SS]
+    timestamp_pattern = r'### \[(?P<time>\d{2}:\d{2}:\d{2})\]'
+    matches = list(re.finditer(timestamp_pattern, content))
+
     # 每 2000 字切一段
     chunk_size = 2000
-    chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+    chunks = []
+    chunk_times = []
+    
+    for i in range(0, len(content), chunk_size):
+        chunk_start = i
+        chunk_end = min(i + chunk_size, len(content))
+        chunk = content[chunk_start:chunk_end]
+        chunks.append(chunk)
+        
+        # 找出本段落涵蓋的時間範圍
+        times_in_this_chunk = [m.group('time') for m in matches if chunk_start <= m.start() < chunk_end]
+        
+        if times_in_this_chunk:
+            start_t = times_in_this_chunk[0]
+            end_t = times_in_this_chunk[-1]
+        else:
+            prev_matches = [m.group('time') for m in matches if m.start() < chunk_start]
+            start_t = prev_matches[-1] if prev_matches else "00:00:00"
+            end_t = start_t
+            
+        chunk_times.append((start_t, end_t))
     
     try:
         client = ollama.Client(host='http://localhost:11434', timeout=600)
@@ -56,7 +81,10 @@ def generate_summary(md_file_path):
     full_summary = ""
     
     for idx, chunk in enumerate(chunks):
-        tqdm.write(f"⏳ [AI 思考中... 正在整理重點筆記，進度 {idx+1}/{len(chunks)}]")
+        start_t, end_t = chunk_times[idx]
+        time_range_str = f"[{start_t} - {end_t}]" if start_t != end_t else f"[{start_t}]"
+        
+        tqdm.write(f"⏳ [AI 思考中... 正在整理重點筆記，時間範圍 {time_range_str}，進度 {idx+1}/{len(chunks)}]")
         
         prompt = f"""你好！我是你的占星課程專用助教。
 我會幫你把這段聽起來可能有點碎碎念的錄音轉錄稿，整理成一份既專業又好讀的「星象筆記」。
@@ -68,7 +96,7 @@ def generate_summary(md_file_path):
 2. **語氣風格**：請維持溫和、有溫度且像朋友聊天般的專業助教口吻。可以適度展現出「我們一起學習」的氛圍。
 3. **系統化結構**：請嚴格套用以下 Markdown 格式排版，不要隨意更動標題名稱：
 
-## 📑 星象隨行筆記：[請根據這段內容起一個溫馨有趣的副標題]
+## 📑 星象隨行筆記 {time_range_str}：[請根據這段內容起一個溫馨有趣的副標題]
 
 > [!TIP]
 > **本段核心**：[用 1-2 句話精煉地總結這段最重要的核心訊息，要讓人一眼就看懂老師在講什麼。]
@@ -120,7 +148,7 @@ def generate_summary(md_file_path):
         
             # 如果有多個 Part，則增加分段標題
             if len(chunks) > 1:
-                full_summary += f"\n\n---\n\n## 🔮 第 {idx+1} 階段筆記\n\n"
+                full_summary += f"\n\n---\n\n## 🔮 第 {idx+1} 階段筆記 {time_range_str}\n\n"
             
             full_summary += chunk_summary
 
